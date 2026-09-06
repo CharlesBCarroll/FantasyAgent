@@ -20,6 +20,16 @@ def current_week(season: int) -> int:
     return int(schedule["week"].max())
 
 
+# ESPN's proTeam abbreviations differ from nflverse's team abbreviations for
+# two franchises; every other team matches between the two conventions.
+_ESPN_TO_NFLVERSE_TEAM = {"LAR": "LA", "WSH": "WAS"}
+
+
+def normalize_team_abbr(team: str) -> str:
+    """Map an ESPN team abbreviation to nflverse's convention, if they differ."""
+    return _ESPN_TO_NFLVERSE_TEAM.get(team, team)
+
+
 def normalize_name(name: str) -> str:
     """Normalize a player name for fuzzy matching across data sources.
 

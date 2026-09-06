@@ -9,8 +9,8 @@ status alerts, close calls, waiver candidates) that the runtime research layer
 
 from fantasy_agent.engine.blend import blend, matchup_adjustment
 from fantasy_agent.platforms.base import FreeAgent, Player, Roster
-from fantasy_agent.projections import nfl_data_source, sleeper_source
-from fantasy_agent.utils import normalize_name
+from fantasy_agent.projections import nfl_data_source, sleeper_source, weather_source
+from fantasy_agent.utils import normalize_name, normalize_team_abbr
 
 STATUS_ALERT_LEVELS = {"QUESTIONABLE", "DOUBTFUL", "OUT", "IR"}
 CLOSE_CALL_MARGIN = 2.0
@@ -56,13 +56,20 @@ def project_player(
     blended, breakdown = blend(sources, player.position, weights)
 
     if blended is not None and player.opponent:
-        opp_team = player.opponent.lstrip("@")
+        opp_team = normalize_team_abbr(player.opponent.lstrip("@"))
         rank = nfl_data_source.opponent_defense_rank(
             player.position, opp_team, season, week, resolved_scoring
         )
         factor = matchup_adjustment(rank)
         blended = blended * factor
         breakdown["matchup_adjustment_factor"] = factor
+
+    if blended is not None:
+        weather = weather_source.get_game_weather(season, week, player.nfl_team)
+        weather_factor = weather_source.weather_adjustment(weather, player.position)
+        if weather_factor != 1.0:
+            blended = blended * weather_factor
+            breakdown["weather_adjustment_factor"] = weather_factor
 
     return blended, breakdown
 

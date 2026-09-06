@@ -12,7 +12,7 @@ from collections import defaultdict
 from fantasy_agent.storage import db
 
 MIN_SAMPLES = 3
-NON_SOURCE_KEYS = {"matchup_adjustment_factor"}
+NON_SOURCE_KEYS = {"matchup_adjustment_factor", "weather_adjustment_factor"}
 
 
 def update_weights(conn, min_samples: int = MIN_SAMPLES) -> dict[tuple[str, str], float]:

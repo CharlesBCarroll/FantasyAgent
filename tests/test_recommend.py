@@ -10,10 +10,11 @@ from fantasy_agent.platforms.base import FreeAgent, Player, Roster
 
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
-    # recent_trend / opponent_defense_rank / Sleeper trending normally hit the network; keep tests offline.
+    # recent_trend / opponent_defense_rank / Sleeper trending / weather normally hit the network; keep tests offline.
     monkeypatch.setattr("fantasy_agent.projections.nfl_data_source.recent_trend", lambda *a, **k: None)
     monkeypatch.setattr("fantasy_agent.projections.nfl_data_source.opponent_defense_rank", lambda *a, **k: None)
     monkeypatch.setattr("fantasy_agent.projections.sleeper_source.get_trending", lambda *a, **k: {})
+    monkeypatch.setattr("fantasy_agent.projections.weather_source.get_game_weather", lambda *a, **k: None)
 
 
 def make_player(name, position, slot, status="ACTIVE", native_projection=10.0, eligible_slots=None):
