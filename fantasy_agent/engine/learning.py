@@ -37,3 +37,37 @@ def update_weights(conn, min_samples: int = MIN_SAMPLES) -> dict[tuple[str, str]
         updated[(source, position)] = weight
 
     return updated
+
+
+def get_accuracy_summary(conn, season: int, current_week: int, weeks_back: int = 4) -> dict:
+    """Recent blended-projection accuracy, for surfacing the learning loop to the user.
+
+    Mirrors update_weights' error computation but reports the FINAL blended
+    projection's error (not per-source), scoped to the last `weeks_back`
+    weeks, so the report shows "how close was I lately" rather than an
+    all-time average that early-season noise would dominate.
+    """
+    min_week = current_week - weeks_back
+    position_errors: dict[str, list[float]] = defaultdict(list)
+    overall_errors: list[float] = []
+
+    for row in db.get_graded_history(conn):
+        if row["season"] != season or not (min_week <= row["week"] < current_week):
+            continue
+        if row["blended_projection"] is None:
+            continue
+        error = abs(row["blended_projection"] - row["actual_points"])
+        position_errors[row["position"]].append(error)
+        overall_errors.append(error)
+
+    return {
+        "weeks_back": weeks_back,
+        "sample_size": len(overall_errors),
+        "overall_mae": sum(overall_errors) / len(overall_errors) if overall_errors else None,
+        "position_mae": {
+            position: sum(errs) / len(errs) for position, errs in position_errors.items()
+        },
+        "source_weights": {
+            f"{source}/{position}": weight for (source, position), weight in db.get_source_weights(conn).items()
+        },
+    }

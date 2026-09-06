@@ -90,6 +90,35 @@ def render_team_report(lineup_rec: dict, waiver_rec: dict, graded_count: int) ->
     return "\n".join(lines)
 
 
+def render_accuracy_summary(summary: dict) -> str:
+    """Makes the self-learning loop visible: how close recent projections were, and current weights."""
+    if not summary or not summary.get("sample_size"):
+        return (
+            "## Learning Loop\n\n"
+            "_Not enough graded history yet to report accuracy — this fills in "
+            "as weeks get graded._"
+        )
+
+    lines = [
+        "## Learning Loop",
+        f"\n_Based on {summary['sample_size']} graded player result(s) over the last "
+        f"{summary['weeks_back']} week(s)._",
+        f"\n**Overall average error:** {_fmt(summary['overall_mae'])} pts",
+    ]
+
+    if summary["position_mae"]:
+        lines.append("\n**By position:**")
+        for position, mae in sorted(summary["position_mae"].items()):
+            lines.append(f"- {position}: {_fmt(mae)} pts avg error")
+
+    if summary["source_weights"]:
+        lines.append("\n**Current source weights** (higher = more trusted, learned from accuracy):")
+        for key, weight in sorted(summary["source_weights"].items()):
+            lines.append(f"- {key}: {weight:.2f}")
+
+    return "\n".join(lines)
+
+
 def render_full_report(season: int, week: int, team_sections: list[str]) -> str:
     header = f"# Fantasy Lineup Report — {season} Week {week}\n"
     return header + "\n\n".join(team_sections)

@@ -152,7 +152,7 @@ def get_ungraded_weeks(conn: sqlite3.Connection, platform: str, league_label: st
 def get_graded_history(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        """SELECT p.position, p.source_breakdown, p.blended_projection, a.actual_points
+        """SELECT p.season, p.week, p.position, p.source_breakdown, p.blended_projection, a.actual_points
            FROM predictions p
            JOIN actuals a
              ON a.platform = p.platform AND a.league_label = p.league_label

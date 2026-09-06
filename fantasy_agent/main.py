@@ -19,10 +19,11 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
+from fantasy_agent.engine import learning
 from fantasy_agent.engine.recommend import generate_lineup_recommendations, generate_waiver_recommendations
 from fantasy_agent.grading.grade import grade_pending_weeks
 from fantasy_agent.platforms import espn_client, yahoo_client
-from fantasy_agent.reporting.report import render_full_report, render_team_report
+from fantasy_agent.reporting.report import render_accuracy_summary, render_full_report, render_team_report
 from fantasy_agent.storage import db
 from fantasy_agent.utils import current_week
 
@@ -116,13 +117,16 @@ def main() -> None:
         result = run_league(conn, CLIENTS[platform], platform, league_cfg, season, week)
         results.append(result)
 
+    accuracy_summary = learning.get_accuracy_summary(conn, season, week)
     conn.close()
 
-    full_report = render_full_report(season, week, [r["markdown"] for r in results])
+    accuracy_markdown = render_accuracy_summary(accuracy_summary)
+    full_report = render_full_report(season, week, [accuracy_markdown] + [r["markdown"] for r in results])
 
     output = {
         "season": season,
         "week": week,
+        "accuracy_summary": accuracy_summary,
         "results": results,
         "full_report_markdown": full_report,
     }
