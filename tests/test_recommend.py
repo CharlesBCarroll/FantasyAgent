@@ -4,6 +4,7 @@ from fantasy_agent.engine.recommend import (
     generate_lineup_recommendations,
     generate_waiver_recommendations,
     project_player,
+    suggest_handcuffs,
 )
 from fantasy_agent.platforms.base import FreeAgent, Player, Roster
 
@@ -126,3 +127,36 @@ def test_waiver_recommendation_trending_adds_is_none_when_not_trending():
     )
     waivers = generate_waiver_recommendations(roster, [agent], season=2026, week=3, weights=None)
     assert waivers["WR"][0]["trending_adds"] is None
+
+
+def test_suggest_handcuffs_picks_best_same_team_same_position_free_agent():
+    injured = make_player("Injured RB", "RB", "RB", status="OUT", native_projection=15.0)
+    injured.nfl_team = "BUF"
+    status_alerts = [
+        {"player_id": injured.player_id, "name": injured.name, "status": "OUT", "lineup_slot": "RB"}
+    ]
+    weak_backup = FreeAgent(
+        platform="espn", player_id="fa1", name="Weak Backup", position="RB", nfl_team="BUF", native_projection=5.0
+    )
+    strong_backup = FreeAgent(
+        platform="espn", player_id="fa2", name="Strong Backup", position="RB", nfl_team="BUF", native_projection=9.0
+    )
+    wrong_team = FreeAgent(
+        platform="espn", player_id="fa3", name="Wrong Team RB", position="RB", nfl_team="KC", native_projection=20.0
+    )
+    handcuffs = suggest_handcuffs(
+        status_alerts, [injured], [weak_backup, strong_backup, wrong_team], season=2026, week=3, weights=None
+    )
+    assert handcuffs[injured.player_id]["name"] == "Strong Backup"
+
+
+def test_suggest_handcuffs_skips_questionable_status():
+    questionable = make_player("Maybe Guy", "RB", "RB", status="QUESTIONABLE", native_projection=15.0)
+    status_alerts = [
+        {"player_id": questionable.player_id, "name": questionable.name, "status": "QUESTIONABLE", "lineup_slot": "RB"}
+    ]
+    backup = FreeAgent(
+        platform="espn", player_id="fa1", name="Backup", position="RB", nfl_team="KC", native_projection=9.0
+    )
+    handcuffs = suggest_handcuffs(status_alerts, [questionable], [backup], season=2026, week=3, weights=None)
+    assert handcuffs == {}

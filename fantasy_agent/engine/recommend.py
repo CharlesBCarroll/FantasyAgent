@@ -13,6 +13,7 @@ from fantasy_agent.projections import nfl_data_source, sleeper_source, weather_s
 from fantasy_agent.utils import normalize_name, normalize_team_abbr
 
 STATUS_ALERT_LEVELS = {"QUESTIONABLE", "DOUBTFUL", "OUT", "IR"}
+SEVERE_STATUS_LEVELS = {"OUT", "DOUBTFUL"}
 CLOSE_CALL_MARGIN = 2.0
 
 
@@ -210,3 +211,55 @@ def generate_waiver_recommendations(
         position: sorted(candidates, key=lambda c: c["projection"], reverse=True)[:top_n]
         for position, candidates in by_position.items()
     }
+
+
+def suggest_handcuffs(
+    status_alerts: list[dict],
+    roster_players: list[Player],
+    free_agents: list[FreeAgent],
+    season: int,
+    week: int,
+    weights: dict[tuple[str, str], float] | None = None,
+    scoring: str | dict | None = None,
+) -> dict[str, dict]:
+    """For each OUT/DOUBTFUL status alert, suggest the best same-team/same-position free agent.
+
+    A rostered player's most direct replacement is almost always the backup
+    on their own NFL team stepping into the vacated role, so this filters
+    free agents to that team+position rather than a generic top-waiver list.
+    """
+    severe_ids = {a["player_id"] for a in status_alerts if a["status"] in SEVERE_STATUS_LEVELS}
+    if not severe_ids:
+        return {}
+
+    roster_by_id = {p.player_id: p for p in roster_players}
+    trending_adds = _trending_adds()
+
+    suggestions: dict[str, dict] = {}
+    for player_id in severe_ids:
+        injured = roster_by_id.get(player_id)
+        if injured is None:
+            continue
+        candidates = [
+            agent
+            for agent in free_agents
+            if agent.nfl_team == injured.nfl_team and agent.position == injured.position
+        ]
+        scored = []
+        for agent in candidates:
+            blended, _ = project_player(agent, season, week, weights, scoring)
+            if blended is None:
+                continue
+            scored.append((blended, trending_adds.get(normalize_name(agent.name), 0), agent))
+        if not scored:
+            continue
+        scored.sort(key=lambda t: (t[0], t[1]), reverse=True)
+        best_projection, _, best_agent = scored[0]
+        suggestions[player_id] = {
+            "name": best_agent.name,
+            "nfl_team": best_agent.nfl_team,
+            "projection": best_projection,
+            "trending_adds": trending_adds.get(normalize_name(best_agent.name)),
+        }
+
+    return suggestions

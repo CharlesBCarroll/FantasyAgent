@@ -38,7 +38,15 @@ def render_team_report(lineup_rec: dict, waiver_rec: dict, graded_count: int) ->
     if lineup_rec["status_alerts"]:
         lines.append("\n### ⚠️ Status Alerts (needs research)")
         for alert in lineup_rec["status_alerts"]:
-            lines.append(f"- **{alert['name']}** ({alert['lineup_slot']}) — {alert['status']}")
+            line = f"- **{alert['name']}** ({alert['lineup_slot']}) — {alert['status']}"
+            replacement = alert.get("suggested_replacement")
+            if replacement:
+                buzz = f", 🔥 {replacement['trending_adds']:,} adds" if replacement.get("trending_adds") else ""
+                line += (
+                    f" — likely handcuff: **{replacement['name']}** ({replacement['nfl_team']}) "
+                    f"{_fmt(replacement['projection'])} pts{buzz}"
+                )
+            lines.append(line)
 
     if lineup_rec.get("trending_down_alerts"):
         lines.append("\n### 📉 Trending Down (early warning, needs research)")

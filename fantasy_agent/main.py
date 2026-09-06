@@ -20,7 +20,11 @@ import yaml
 from dotenv import load_dotenv
 
 from fantasy_agent.engine import learning
-from fantasy_agent.engine.recommend import generate_lineup_recommendations, generate_waiver_recommendations
+from fantasy_agent.engine.recommend import (
+    generate_lineup_recommendations,
+    generate_waiver_recommendations,
+    suggest_handcuffs,
+)
 from fantasy_agent.grading.grade import grade_pending_weeks
 from fantasy_agent.platforms import espn_client, yahoo_client
 from fantasy_agent.reporting.report import render_accuracy_summary, render_full_report, render_team_report
@@ -51,6 +55,13 @@ def run_league(conn, client_module, platform: str, league_cfg: dict, season: int
 
     lineup_rec = generate_lineup_recommendations(roster, season, week, weights, scoring)
     waiver_rec = generate_waiver_recommendations(roster, free_agents, season, week, weights, scoring=scoring)
+
+    handcuffs = suggest_handcuffs(
+        lineup_rec["status_alerts"], roster.players, free_agents, season, week, weights, scoring
+    )
+    for alert in lineup_rec["status_alerts"]:
+        if alert["player_id"] in handcuffs:
+            alert["suggested_replacement"] = handcuffs[alert["player_id"]]
 
     for player in roster.players:
         info = lineup_rec["projections"][player.player_id]
