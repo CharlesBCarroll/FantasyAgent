@@ -40,8 +40,9 @@ pip install -r requirements.txt
    URL grab your `league_id`. Your `team_key` has the form
    `<game_key>.l.<league_id>.t.<team_id>` — visible in the URL when viewing
    your team, or via Yahoo's league settings page.
-4. Fill in `config/leagues.yaml` under `yahoo:` (`league_id`, `team_key`,
-   set `enabled: true`).
+4. `config/leagues.yaml`'s `yahoo:` key is a **list** — add one entry per
+   Yahoo league you're in, each with its own `label`, `team_key`, and
+   `enabled: true`.
 5. Run the one-time OAuth handshake:
    ```bash
    python scripts/setup_yahoo_oauth.py
@@ -62,8 +63,10 @@ logged-in browser session on fantasy.espn.com:
 4. Find your `league_id` (from the league URL `?leagueId=...`) and your
    `team_id` (your team's numeric id within that league — visible in the
    team URL or by matching your team name in `league.teams`).
-5. Fill in `config/leagues.yaml` under `espn:` (`league_id`, `team_id`,
-   set `enabled: true`).
+5. `config/leagues.yaml`'s `espn:` key is a **list** — add one entry per
+   ESPN league you're in, each with its own `label`, `league_id`, `team_id`,
+   and `enabled: true`. The same `ESPN_S2`/`ESPN_SWID` cookies work across
+   all leagues on your account.
 
 ### 4. Sanity check
 

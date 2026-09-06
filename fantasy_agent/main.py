@@ -3,11 +3,12 @@
 Usage:
     python -m fantasy_agent.main run [--platform yahoo|espn|all] [--week N]
 
-Prints a single JSON object to stdout containing, per platform run, the
-lineup recommendations, waiver suggestions, and a rendered markdown report
-skeleton. This is consumed either directly by a human, or by the scheduled
-Claude agent which layers live web research on top before writing the final
-report and sending a notification.
+Runs every enabled league entry for the selected platform(s) — you can be in
+multiple leagues on the same platform. Prints a single JSON object to stdout
+containing, per league, the lineup recommendations, waiver suggestions, and a
+rendered markdown report skeleton. This is consumed either directly by a
+human, or by the scheduled Claude agent which layers live web research on
+top before writing the final report and sending a notification.
 """
 
 import argparse
@@ -37,12 +38,12 @@ def load_config() -> dict:
     return yaml.safe_load(CONFIG_PATH.read_text())
 
 
-def run_platform(conn, client_module, platform: str, config: dict, season: int, week: int) -> dict:
+def run_league(conn, client_module, platform: str, league_cfg: dict, season: int, week: int) -> dict:
     graded_count = grade_pending_weeks(conn, platform, season, week)
     weights = db.get_source_weights(conn)
 
-    roster = client_module.get_roster(config, week)
-    free_agents = client_module.get_free_agents(config)
+    roster = client_module.get_roster(season, league_cfg, week)
+    free_agents = client_module.get_free_agents(season, league_cfg)
 
     lineup_rec = generate_lineup_recommendations(roster, season, week, weights)
     waiver_rec = generate_waiver_recommendations(roster, free_agents, season, week, weights)
@@ -67,6 +68,7 @@ def run_platform(conn, client_module, platform: str, config: dict, season: int, 
 
     return {
         "platform": platform,
+        "label": league_cfg.get("label", roster.team_name),
         "graded_count": graded_count,
         "lineup_recommendations": lineup_rec,
         "waiver_recommendations": waiver_rec,
@@ -87,11 +89,17 @@ def main() -> None:
     week = args.week or current_week(season)
 
     platforms = ["yahoo", "espn"] if args.platform == "all" else [args.platform]
-    platforms = [p for p in platforms if config.get(p, {}).get("enabled")]
+    enabled_leagues = [
+        (platform, league_cfg)
+        for platform in platforms
+        for league_cfg in config.get(platform, [])
+        if league_cfg.get("enabled")
+    ]
 
-    if not platforms:
+    if not enabled_leagues:
         print(
-            "No enabled platforms found. Set yahoo.enabled/espn.enabled in config/leagues.yaml.",
+            "No enabled leagues found. Set enabled: true on at least one entry "
+            "under yahoo/espn in config/leagues.yaml.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -100,8 +108,8 @@ def main() -> None:
     db.init_db(conn)
 
     results = []
-    for platform in platforms:
-        result = run_platform(conn, CLIENTS[platform], platform, config, season, week)
+    for platform, league_cfg in enabled_leagues:
+        result = run_league(conn, CLIENTS[platform], platform, league_cfg, season, week)
         results.append(result)
 
     conn.close()

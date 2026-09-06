@@ -1,4 +1,9 @@
-"""ESPN Fantasy Football client, wrapping espn_api into the common data model."""
+"""ESPN Fantasy Football client, wrapping espn_api into the common data model.
+
+Every function takes a single `league_cfg` entry (one item from config's
+`espn:` list, e.g. {"league_id": ..., "team_id": ...}) plus `season`, so a
+caller can run this against as many ESPN leagues as they're in.
+"""
 
 import os
 
@@ -7,11 +12,10 @@ from espn_api.football import League
 from fantasy_agent.platforms.base import FreeAgent, Matchup, Player, Roster
 
 
-def _get_league(config: dict) -> League:
-    espn_cfg = config["espn"]
+def _get_league(season: int, league_cfg: dict) -> League:
     return League(
-        league_id=int(espn_cfg["league_id"]),
-        year=int(config["season"]),
+        league_id=int(league_cfg["league_id"]),
+        year=int(season),
         espn_s2=os.environ.get("ESPN_S2") or None,
         swid=os.environ.get("ESPN_SWID") or None,
     )
@@ -38,16 +42,16 @@ def _to_player(p) -> Player:
     )
 
 
-def get_roster(config: dict, week: int) -> Roster:
-    league = _get_league(config)
-    team = _find_team(league, int(config["espn"]["team_id"]))
+def get_roster(season: int, league_cfg: dict, week: int) -> Roster:
+    league = _get_league(season, league_cfg)
+    team = _find_team(league, int(league_cfg["team_id"]))
     players = [_to_player(p) for p in team.roster]
     return Roster(platform="espn", team_name=team.team_name, week=week, players=players)
 
 
-def get_matchup(config: dict, week: int) -> Matchup:
-    league = _get_league(config)
-    team = _find_team(league, int(config["espn"]["team_id"]))
+def get_matchup(season: int, league_cfg: dict, week: int) -> Matchup:
+    league = _get_league(season, league_cfg)
+    team = _find_team(league, int(league_cfg["team_id"]))
     box_scores = league.box_scores(week)
     for box in box_scores:
         if box.home_team.team_id == team.team_id:
@@ -71,8 +75,8 @@ def get_matchup(config: dict, week: int) -> Matchup:
     raise ValueError(f"No ESPN matchup found for team {team.team_name} in week {week}")
 
 
-def get_free_agents(config: dict, size: int = 50) -> list[FreeAgent]:
-    league = _get_league(config)
+def get_free_agents(season: int, league_cfg: dict, size: int = 50) -> list[FreeAgent]:
+    league = _get_league(season, league_cfg)
     agents = league.free_agents(size=size)
     return [
         FreeAgent(

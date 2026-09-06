@@ -1,5 +1,9 @@
 """Yahoo Fantasy Football client, wrapping yfpy into the common data model.
 
+Every function takes a single `league_cfg` entry (one item from config's
+`yahoo:` list, e.g. {"team_key": ...}) plus `season`, so a caller can run
+this against as many Yahoo leagues as they're in.
+
 NOTE: yfpy's exact method names have shifted across major versions. The calls
 below match yfpy 16.x's documented API but should be spot-checked against
 whatever version actually gets installed during the live smoke test.
@@ -29,8 +33,8 @@ def _parse_team_key(team_key: str) -> tuple[str, str]:
     return parts[2], parts[4]
 
 
-def get_query(config: dict) -> YahooFantasySportsQuery:
-    league_id, _team_id = _parse_team_key(config["yahoo"]["team_key"])
+def get_query(season: int, league_cfg: dict) -> YahooFantasySportsQuery:
+    league_id, _team_id = _parse_team_key(league_cfg["team_key"])
     return YahooFantasySportsQuery(
         league_id=league_id,
         game_code="nfl",
@@ -54,18 +58,18 @@ def _to_player(p) -> Player:
     )
 
 
-def get_roster(config: dict, week: int) -> Roster:
-    query = get_query(config)
-    _league_id, team_id = _parse_team_key(config["yahoo"]["team_key"])
+def get_roster(season: int, league_cfg: dict, week: int) -> Roster:
+    query = get_query(season, league_cfg)
+    _league_id, team_id = _parse_team_key(league_cfg["team_key"])
     roster = query.get_team_roster_by_week(team_id, week)
     team_info = query.get_team_info(team_id)
     players = [_to_player(p) for p in roster.players]
     return Roster(platform="yahoo", team_name=team_info.name, week=week, players=players)
 
 
-def get_matchup(config: dict, week: int) -> Matchup:
-    query = get_query(config)
-    _league_id, team_id = _parse_team_key(config["yahoo"]["team_key"])
+def get_matchup(season: int, league_cfg: dict, week: int) -> Matchup:
+    query = get_query(season, league_cfg)
+    _league_id, team_id = _parse_team_key(league_cfg["team_key"])
     scoreboard = query.get_league_scoreboard_by_week(week)
     for matchup in scoreboard.matchups:
         team_ids = [t.team_id for t in matchup.teams]
@@ -84,8 +88,8 @@ def get_matchup(config: dict, week: int) -> Matchup:
     raise ValueError(f"No Yahoo matchup found for team {team_id} in week {week}")
 
 
-def get_free_agents(config: dict, size: int = 50) -> list[FreeAgent]:
-    query = get_query(config)
+def get_free_agents(season: int, league_cfg: dict, size: int = 50) -> list[FreeAgent]:
+    query = get_query(season, league_cfg)
     players = query.get_league_players(player_count_limit=size, is_only_available_players=True)
     return [
         FreeAgent(

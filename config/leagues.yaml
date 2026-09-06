@@ -1,12 +1,19 @@
 # Fill in your real league/team identifiers here. See README.md for how to find each value.
+# Each platform is a LIST so you can run multiple leagues on the same platform.
 season: 2026
 
 yahoo:
-  enabled: false
-  league_id: ""        # e.g. "12345" (from the league URL: .../f1/<league_id>)
-  team_key: ""          # e.g. "423.l.12345.t.1" (game_key.l.league_id.t.team_id)
+  - enabled: false
+    label: "Yahoo League"        # any name you choose, shown in reports
+    league_id: ""                 # e.g. "12345" (from the league URL: .../f1/<league_id>)
+    team_key: ""                   # e.g. "423.l.12345.t.1" (game_key.l.league_id.t.team_id)
 
 espn:
-  enabled: false
-  league_id: ""         # numeric id from the ESPN league URL (?leagueId=...)
-  team_id: ""            # your team's numeric id within that league
+  - enabled: false
+    label: "ESPN League A"
+    league_id: ""                  # numeric id from the ESPN league URL (?leagueId=...)
+    team_id: ""                     # your team's numeric id within that league
+  - enabled: false
+    label: "ESPN League B"
+    league_id: ""
+    team_id: ""
