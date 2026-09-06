@@ -26,7 +26,14 @@ both on a schedule and on demand.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
+cp config/leagues.example.yaml config/leagues.yaml
 ```
+
+`config/leagues.yaml` holds your real league IDs/team IDs/labels — it's
+gitignored (like `.env`) since this repo may be public and those values are
+personal to your leagues. `config/leagues.example.yaml` is the tracked
+template.
 
 ### 2. Yahoo Fantasy API access
 
@@ -34,8 +41,8 @@ pip install -r requirements.txt
    - Redirect URI: `https://localhost:8080` (or any placeholder — yfpy
      handles the OAuth redirect locally).
    - Permissions: Fantasy Sports (read).
-2. Copy the generated **Client ID** and **Client Secret** into `.env` (copy
-   `.env.example` to `.env` first) as `YAHOO_CLIENT_ID` / `YAHOO_CLIENT_SECRET`.
+2. Copy the generated **Client ID** and **Client Secret** into `.env` as
+   `YAHOO_CLIENT_ID` / `YAHOO_CLIENT_SECRET`.
 3. Find your league/team identifiers: open your Yahoo league, and from the
    URL grab your `league_id`. Your `team_key` has the form
    `<game_key>.l.<league_id>.t.<team_id>` — visible in the URL when viewing

@@ -1,20 +1,47 @@
-"""Historical/context signals derived from nflverse data via nfl_data_py.
+"""Historical/context signals derived from nflverse data.
 
-nfl_data_py has no forward-looking projections either — it's actual/historical
-play-by-play-derived weekly stats and injury reports. We derive two signals
-from it: a recent-performance trend (proxy for "current form") and an
-opponent-defense-strength rank (proxy for matchup difficulty). Both feed
-blend.py alongside each platform's own native projection (which already
-reflects the league's real scoring settings). Since these signals are
-computed from raw stats, they must use the same scoring format as the
-league they're being used for, or they'll systematically mislead a
-non-PPR/half-PPR league.
+nfl_data_py's bundled URLs point at nflverse's deprecated "player_stats"
+release (retired 2025-08-01 in favor of "stats_player"/"stats_team"), so we
+fetch directly from the current nflverse-data release assets instead of
+using nfl_data_py's import_weekly_data/import_injuries helpers.
+
+This has no forward-looking projections either — it's actual/historical
+stats. We derive two signals from it: a recent-performance trend (proxy for
+"current form") and an opponent-defense-strength rank (proxy for matchup
+difficulty). Both feed blend.py alongside each platform's own native
+projection (which already reflects the league's real scoring settings).
+Since these signals are computed from raw stats, they must use the same
+scoring format as the league they're being used for, or they'll
+systematically mislead a non-PPR/half-PPR league.
 """
 
-import nfl_data_py as nfl
+import sys
+
 import pandas as pd
 
 from fantasy_agent.utils import normalize_name
+
+WEEKLY_STATS_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{season}.parquet"
+INJURIES_URL = "https://github.com/nflverse/nflverse-data/releases/download/injuries/injuries_{season}.parquet"
+
+_WEEKLY_COLUMNS = [
+    "player_display_name",
+    "week",
+    "position",
+    "opponent_team",
+    "passing_yards",
+    "passing_tds",
+    "passing_interceptions",
+    "rushing_yards",
+    "rushing_tds",
+    "receptions",
+    "receiving_yards",
+    "receiving_tds",
+    "sack_fumbles_lost",
+    "rushing_fumbles_lost",
+    "receiving_fumbles_lost",
+]
+_INJURY_COLUMNS = ["full_name", "week", "report_status"]
 
 _weekly_cache: dict[int, pd.DataFrame] = {}
 _injury_cache: dict[int, pd.DataFrame] = {}
@@ -54,28 +81,49 @@ def resolve_scoring(scoring: str | dict | None) -> dict:
 
 
 def fantasy_points(row, scoring: dict) -> float:
+    fumbles_lost = (
+        row.get("sack_fumbles_lost", 0)
+        + row.get("rushing_fumbles_lost", 0)
+        + row.get("receiving_fumbles_lost", 0)
+    )
     return (
         row.get("passing_yards", 0) / scoring["pass_yd_per_point"]
         + row.get("passing_tds", 0) * scoring["pass_td"]
-        + row.get("interceptions", 0) * scoring["interception"]
+        + row.get("passing_interceptions", 0) * scoring["interception"]
         + row.get("rushing_yards", 0) / scoring["rush_yd_per_point"]
         + row.get("rushing_tds", 0) * scoring["rush_td"]
         + row.get("receptions", 0) * scoring["reception"]
         + row.get("receiving_yards", 0) / scoring["rec_yd_per_point"]
         + row.get("receiving_tds", 0) * scoring["rec_td"]
-        + row.get("fumbles_lost", 0) * scoring["fumble_lost"]
+        + fumbles_lost * scoring["fumble_lost"]
     )
+
+
+def _fetch_parquet(url: str, empty_columns: list[str], season: int, what: str) -> pd.DataFrame:
+    try:
+        return pd.read_parquet(url)
+    except Exception as exc:
+        print(
+            f"[nfl_data_source] no {what} data available yet for {season} ({exc}); "
+            "falling back to native projections only for this signal.",
+            file=sys.stderr,
+        )
+        return pd.DataFrame(columns=empty_columns)
 
 
 def _weekly_data(season: int) -> pd.DataFrame:
     if season not in _weekly_cache:
-        _weekly_cache[season] = nfl.import_weekly_data([season])
+        _weekly_cache[season] = _fetch_parquet(
+            WEEKLY_STATS_URL.format(season=season), _WEEKLY_COLUMNS, season, "weekly stats"
+        )
     return _weekly_cache[season]
 
 
 def _injury_data(season: int) -> pd.DataFrame:
     if season not in _injury_cache:
-        _injury_cache[season] = nfl.import_injuries([season])
+        _injury_cache[season] = _fetch_parquet(
+            INJURIES_URL.format(season=season), _INJURY_COLUMNS, season, "injury report"
+        )
     return _injury_cache[season]
 
 

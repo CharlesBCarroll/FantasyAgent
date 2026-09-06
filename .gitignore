@@ -1,5 +1,6 @@
 .env
 secrets/
+config/leagues.yaml
 reports/*
 !reports/.gitkeep
 *.db
