@@ -1,5 +1,14 @@
 # Fill in your real league/team identifiers here. See README.md for how to find each value.
 # Each platform is a LIST so you can run multiple leagues on the same platform.
+#
+# `scoring` controls how *our own* derived signals (recent-form trend,
+# opponent-defense strength, and grading of past predictions) compute
+# fantasy points. Your platform's own native projections already use your
+# real league scoring automatically — this only affects the extra signals
+# this project adds on top. Options: "ppr" (default), "half_ppr", "standard".
+# You can also give a full coefficient override dict instead of a preset
+# name if your league has unusual scoring — see resolve_scoring() in
+# fantasy_agent/projections/nfl_data_source.py for the coefficient keys.
 season: 2026
 
 yahoo:
@@ -7,13 +16,16 @@ yahoo:
     label: "Yahoo League"        # any name you choose, shown in reports
     league_id: ""                 # e.g. "12345" (from the league URL: .../f1/<league_id>)
     team_key: ""                   # e.g. "423.l.12345.t.1" (game_key.l.league_id.t.team_id)
+    scoring: "ppr"
 
 espn:
   - enabled: false
     label: "ESPN League A"
     league_id: ""                  # numeric id from the ESPN league URL (?leagueId=...)
     team_id: ""                     # your team's numeric id within that league
+    scoring: "ppr"
   - enabled: false
     label: "ESPN League B"
     league_id: ""
     team_id: ""
+    scoring: "standard"

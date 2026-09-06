@@ -20,16 +20,20 @@ def project_player(
     season: int,
     week: int,
     weights: dict[tuple[str, str], float] | None,
+    scoring: str | dict | None = None,
 ) -> tuple[float | None, dict]:
+    resolved_scoring = nfl_data_source.resolve_scoring(scoring)
     sources = {
         "native": player.native_projection,
-        "trend": nfl_data_source.recent_trend(player.name, season, week),
+        "trend": nfl_data_source.recent_trend(player.name, season, week, resolved_scoring),
     }
     blended, breakdown = blend(sources, player.position, weights)
 
     if blended is not None and player.opponent:
         opp_team = player.opponent.lstrip("@")
-        rank = nfl_data_source.opponent_defense_rank(player.position, opp_team, season, week)
+        rank = nfl_data_source.opponent_defense_rank(
+            player.position, opp_team, season, week, resolved_scoring
+        )
         factor = matchup_adjustment(rank)
         blended = blended * factor
         breakdown["matchup_adjustment_factor"] = factor
@@ -50,10 +54,11 @@ def generate_lineup_recommendations(
     season: int,
     week: int,
     weights: dict[tuple[str, str], float] | None = None,
+    scoring: str | dict | None = None,
 ) -> dict:
     projections: dict[str, dict] = {}
     for player in roster.players:
-        blended, breakdown = project_player(player, season, week, weights)
+        blended, breakdown = project_player(player, season, week, weights, scoring)
         projections[player.player_id] = {
             "name": player.name,
             "position": player.position,
@@ -125,10 +130,11 @@ def generate_waiver_recommendations(
     week: int,
     weights: dict[tuple[str, str], float] | None = None,
     top_n: int = 3,
+    scoring: str | dict | None = None,
 ) -> dict[str, list[dict]]:
     weakest_by_position: dict[str, float] = {}
     for player in roster.players:
-        blended, _ = project_player(player, season, week, weights)
+        blended, _ = project_player(player, season, week, weights, scoring)
         if blended is None:
             continue
         current = weakest_by_position.get(player.position)
@@ -137,7 +143,7 @@ def generate_waiver_recommendations(
 
     by_position: dict[str, list[dict]] = {}
     for agent in free_agents:
-        blended, breakdown = project_player(agent, season, week, weights)
+        blended, breakdown = project_player(agent, season, week, weights, scoring)
         if blended is None:
             continue
         by_position.setdefault(agent.position, []).append(

@@ -39,20 +39,24 @@ def load_config() -> dict:
 
 
 def run_league(conn, client_module, platform: str, league_cfg: dict, season: int, week: int) -> dict:
-    graded_count = grade_pending_weeks(conn, platform, season, week)
+    label = league_cfg.get("label") or f"{platform}-{league_cfg.get('league_id')}"
+    scoring = league_cfg.get("scoring")
+
+    graded_count = grade_pending_weeks(conn, platform, label, season, week, scoring)
     weights = db.get_source_weights(conn)
 
     roster = client_module.get_roster(season, league_cfg, week)
     free_agents = client_module.get_free_agents(season, league_cfg)
 
-    lineup_rec = generate_lineup_recommendations(roster, season, week, weights)
-    waiver_rec = generate_waiver_recommendations(roster, free_agents, season, week, weights)
+    lineup_rec = generate_lineup_recommendations(roster, season, week, weights, scoring)
+    waiver_rec = generate_waiver_recommendations(roster, free_agents, season, week, weights, scoring=scoring)
 
     for player in roster.players:
         info = lineup_rec["projections"][player.player_id]
         db.record_prediction(
             conn,
             platform=platform,
+            league_label=label,
             team_name=roster.team_name,
             season=season,
             week=week,
@@ -68,7 +72,7 @@ def run_league(conn, client_module, platform: str, league_cfg: dict, season: int
 
     return {
         "platform": platform,
-        "label": league_cfg.get("label", roster.team_name),
+        "label": label,
         "graded_count": graded_count,
         "lineup_recommendations": lineup_rec,
         "waiver_recommendations": waiver_rec,

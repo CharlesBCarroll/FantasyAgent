@@ -4,6 +4,11 @@ This is the backbone of the self-learning loop: every recommendation run logs
 its blended projection per player, and once real results are known,
 grading/grade.py inserts the actuals and engine/learning.py recomputes
 per-source/per-position weights from the accumulated history.
+
+Predictions/actuals are scoped per league (via `league_label`), not just per
+platform — two leagues on the same platform can use different scoring
+formats (PPR vs standard), so "actual points" for a given player/week isn't
+a single well-defined number across leagues.
 """
 
 import sqlite3
@@ -16,6 +21,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     platform TEXT NOT NULL,
+    league_label TEXT NOT NULL,
     team_name TEXT NOT NULL,
     season INTEGER NOT NULL,
     week INTEGER NOT NULL,
@@ -31,13 +37,14 @@ CREATE TABLE IF NOT EXISTS predictions (
 CREATE TABLE IF NOT EXISTS actuals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     platform TEXT NOT NULL,
+    league_label TEXT NOT NULL,
     season INTEGER NOT NULL,
     week INTEGER NOT NULL,
     player_id TEXT NOT NULL,
     player_name TEXT NOT NULL,
     actual_points REAL NOT NULL,
     graded_at TEXT NOT NULL,
-    UNIQUE(platform, season, week, player_id)
+    UNIQUE(platform, league_label, season, week, player_id)
 );
 
 CREATE TABLE IF NOT EXISTS source_weights (
@@ -65,6 +72,7 @@ def record_prediction(
     conn: sqlite3.Connection,
     *,
     platform: str,
+    league_label: str,
     team_name: str,
     season: int,
     week: int,
@@ -77,11 +85,12 @@ def record_prediction(
 ) -> None:
     conn.execute(
         """INSERT INTO predictions
-           (platform, team_name, season, week, player_id, player_name, position,
-            decision, blended_projection, source_breakdown, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (platform, league_label, team_name, season, week, player_id, player_name,
+            position, decision, blended_projection, source_breakdown, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             platform,
+            league_label,
             team_name,
             season,
             week,
@@ -101,6 +110,7 @@ def record_actual(
     conn: sqlite3.Connection,
     *,
     platform: str,
+    league_label: str,
     season: int,
     week: int,
     player_id: str,
@@ -109,10 +119,11 @@ def record_actual(
 ) -> None:
     conn.execute(
         """INSERT OR REPLACE INTO actuals
-           (platform, season, week, player_id, player_name, actual_points, graded_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+           (platform, league_label, season, week, player_id, player_name, actual_points, graded_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             platform,
+            league_label,
             season,
             week,
             player_id,
@@ -124,16 +135,16 @@ def record_actual(
     conn.commit()
 
 
-def get_ungraded_weeks(conn: sqlite3.Connection, platform: str, season: int) -> list[int]:
+def get_ungraded_weeks(conn: sqlite3.Connection, platform: str, league_label: str, season: int) -> list[int]:
     rows = conn.execute(
         """SELECT DISTINCT p.week FROM predictions p
-           WHERE p.platform = ? AND p.season = ?
+           WHERE p.platform = ? AND p.league_label = ? AND p.season = ?
            AND NOT EXISTS (
                SELECT 1 FROM actuals a
-               WHERE a.platform = p.platform AND a.season = p.season
-               AND a.week = p.week AND a.player_id = p.player_id
+               WHERE a.platform = p.platform AND a.league_label = p.league_label
+               AND a.season = p.season AND a.week = p.week AND a.player_id = p.player_id
            )""",
-        (platform, season),
+        (platform, league_label, season),
     ).fetchall()
     return sorted(r[0] for r in rows)
 
@@ -144,8 +155,8 @@ def get_graded_history(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         """SELECT p.position, p.source_breakdown, p.blended_projection, a.actual_points
            FROM predictions p
            JOIN actuals a
-             ON a.platform = p.platform AND a.season = p.season
-            AND a.week = p.week AND a.player_id = p.player_id"""
+             ON a.platform = p.platform AND a.league_label = p.league_label
+            AND a.season = p.season AND a.week = p.week AND a.player_id = p.player_id"""
     ).fetchall()
     conn.row_factory = None
     return rows
