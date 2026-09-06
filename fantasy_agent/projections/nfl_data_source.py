@@ -17,9 +17,10 @@ systematically mislead a non-PPR/half-PPR league.
 
 import sys
 
+import nfl_data_py as nfl
 import pandas as pd
 
-from fantasy_agent.utils import normalize_name
+from fantasy_agent.utils import normalize_name, normalize_team_abbr
 
 WEEKLY_STATS_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{season}.parquet"
 INJURIES_URL = "https://github.com/nflverse/nflverse-data/releases/download/injuries/injuries_{season}.parquet"
@@ -45,6 +46,11 @@ _INJURY_COLUMNS = ["full_name", "week", "report_status"]
 
 _weekly_cache: dict[int, pd.DataFrame] = {}
 _injury_cache: dict[int, pd.DataFrame] = {}
+_schedule_cache: dict[int, pd.DataFrame] = {}
+
+DEFENSE_RANK_TOTAL_TEAMS = 32
+SOFT_MATCHUP_RANK = 23  # rank >= this allows the most fantasy points (softest matchup)
+TOUGH_MATCHUP_RANK = 10  # rank <= this allows the fewest fantasy points (toughest matchup)
 
 SCORING_PRESETS = {
     "ppr": {"reception": 1.0},
@@ -165,6 +171,50 @@ def actual_points(player_name: str, season: int, week: int, scoring: dict) -> fl
     if rows.empty:
         return None
     return float(fantasy_points(rows.iloc[-1], scoring))
+
+
+def _schedule(season: int) -> pd.DataFrame:
+    if season not in _schedule_cache:
+        _schedule_cache[season] = nfl.import_schedules([season])
+    return _schedule_cache[season]
+
+
+def _matchup_label(rank: int | None) -> str:
+    if rank is None:
+        return "unknown"
+    if rank <= TOUGH_MATCHUP_RANK:
+        return "tough"
+    if rank >= SOFT_MATCHUP_RANK:
+        return "soft"
+    return "neutral"
+
+
+def rest_of_season_matchups(
+    position: str, nfl_team: str, season: int, from_week: int, scoring: dict, lookback_weeks: int = 3
+) -> list[dict]:
+    """This team's next `lookback_weeks` opponents and how tough each is for `position`.
+
+    Defense strength is evaluated using data available as of `from_week` for
+    every future matchup (there's no way to know a future week's actual
+    defensive performance in advance) — this answers "given what we know
+    now, which of the next few matchups look softest," not a live forecast.
+    """
+    team = normalize_team_abbr(nfl_team)
+    schedule = _schedule(season)
+    upcoming = (
+        schedule[
+            (schedule["week"] > from_week) & ((schedule["home_team"] == team) | (schedule["away_team"] == team))
+        ]
+        .sort_values("week")
+        .head(lookback_weeks)
+    )
+
+    matchups = []
+    for _, row in upcoming.iterrows():
+        opponent = row["away_team"] if row["home_team"] == team else row["home_team"]
+        rank = opponent_defense_rank(position, opponent, season, from_week, scoring)
+        matchups.append({"week": int(row["week"]), "opponent": opponent, "defense_rank": rank, "label": _matchup_label(rank)})
+    return matchups
 
 
 def injury_status(player_name: str, season: int, week: int) -> str | None:

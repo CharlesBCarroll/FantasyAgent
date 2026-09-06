@@ -90,6 +90,7 @@ def generate_lineup_recommendations(
     weights: dict[tuple[str, str], float] | None = None,
     scoring: str | dict | None = None,
 ) -> dict:
+    resolved_scoring = nfl_data_source.resolve_scoring(scoring)
     projections: dict[str, dict] = {}
     for player in roster.players:
         blended, breakdown = project_player(player, season, week, weights, scoring)
@@ -100,6 +101,9 @@ def generate_lineup_recommendations(
             "status": player.status,
             "blended_projection": blended,
             "breakdown": breakdown,
+            "rest_of_season": nfl_data_source.rest_of_season_matchups(
+                player.position, player.nfl_team, season, week, resolved_scoring
+            ),
         }
 
     status_alerts = [

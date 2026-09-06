@@ -16,6 +16,7 @@ def no_network(monkeypatch):
     monkeypatch.setattr("fantasy_agent.projections.nfl_data_source.opponent_defense_rank", lambda *a, **k: None)
     monkeypatch.setattr("fantasy_agent.projections.sleeper_source.get_trending", lambda *a, **k: {})
     monkeypatch.setattr("fantasy_agent.projections.weather_source.get_game_weather", lambda *a, **k: None)
+    monkeypatch.setattr("fantasy_agent.projections.nfl_data_source.rest_of_season_matchups", lambda *a, **k: [])
 
 
 def make_player(name, position, slot, status="ACTIVE", native_projection=10.0, eligible_slots=None):

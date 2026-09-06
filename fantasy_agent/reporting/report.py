@@ -29,6 +29,12 @@ def _breakdown_str(breakdown: dict) -> str:
     return ", ".join(parts)
 
 
+def _rest_of_season_str(matchups: list) -> str:
+    if not matchups:
+        return "—"
+    return ", ".join(f"wk{m['week']} {m['opponent']} ({m['label']})" for m in matchups)
+
+
 def render_team_report(lineup_rec: dict, waiver_rec: dict, graded_count: int) -> str:
     lines = [f"## {lineup_rec['team_name']} ({lineup_rec['platform'].upper()}) — Week {lineup_rec['week']}"]
 
@@ -75,12 +81,13 @@ def render_team_report(lineup_rec: dict, waiver_rec: dict, graded_count: int) ->
             )
 
     lines.append("\n### Full Roster Projections")
-    lines.append("| Player | Pos | Slot | Status | Projection | Breakdown |")
-    lines.append("|---|---|---|---|---|---|")
+    lines.append("| Player | Pos | Slot | Status | Projection | Breakdown | Next 3 |")
+    lines.append("|---|---|---|---|---|---|---|")
     for info in lineup_rec["projections"].values():
         lines.append(
             f"| {info['name']} | {info['position']} | {info['lineup_slot']} | "
-            f"{info['status']} | {_fmt(info['blended_projection'])} | {_breakdown_str(info['breakdown'])} |"
+            f"{info['status']} | {_fmt(info['blended_projection'])} | {_breakdown_str(info['breakdown'])} | "
+            f"{_rest_of_season_str(info.get('rest_of_season', []))} |"
         )
 
     if waiver_rec:
