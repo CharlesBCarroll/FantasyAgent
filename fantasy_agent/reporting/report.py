@@ -11,6 +11,24 @@ def _fmt(value) -> str:
     return f"{value:.1f}" if isinstance(value, (int, float)) else "—"
 
 
+_SOURCE_LABELS = {"native": "native", "trend": "trend", "fantasypros": "FP", "weather_adjustment_factor": "weather"}
+
+
+def _breakdown_str(breakdown: dict) -> str:
+    if not breakdown:
+        return "—"
+    parts = []
+    for key, value in breakdown.items():
+        if key == "matchup_adjustment_factor":
+            parts.append(f"matchup ×{value:.2f}")
+        elif key == "weather_adjustment_factor":
+            parts.append(f"weather ×{value:.2f}")
+        else:
+            label = _SOURCE_LABELS.get(key, key)
+            parts.append(f"{label} {_fmt(value)}")
+    return ", ".join(parts)
+
+
 def render_team_report(lineup_rec: dict, waiver_rec: dict, graded_count: int) -> str:
     lines = [f"## {lineup_rec['team_name']} ({lineup_rec['platform'].upper()}) — Week {lineup_rec['week']}"]
 
@@ -21,6 +39,14 @@ def render_team_report(lineup_rec: dict, waiver_rec: dict, graded_count: int) ->
         lines.append("\n### ⚠️ Status Alerts (needs research)")
         for alert in lineup_rec["status_alerts"]:
             lines.append(f"- **{alert['name']}** ({alert['lineup_slot']}) — {alert['status']}")
+
+    if lineup_rec.get("trending_down_alerts"):
+        lines.append("\n### 📉 Trending Down (early warning, needs research)")
+        for alert in lineup_rec["trending_down_alerts"]:
+            lines.append(
+                f"- **{alert['name']}** ({alert['lineup_slot']}) — "
+                f"{alert['drop_count']:,} drops across Sleeper in last 24h"
+            )
 
     if lineup_rec["start_sit_swaps"]:
         lines.append("\n### Suggested Start/Sit Swaps")
@@ -41,12 +67,12 @@ def render_team_report(lineup_rec: dict, waiver_rec: dict, graded_count: int) ->
             )
 
     lines.append("\n### Full Roster Projections")
-    lines.append("| Player | Pos | Slot | Status | Projection |")
-    lines.append("|---|---|---|---|---|")
+    lines.append("| Player | Pos | Slot | Status | Projection | Breakdown |")
+    lines.append("|---|---|---|---|---|---|")
     for info in lineup_rec["projections"].values():
         lines.append(
             f"| {info['name']} | {info['position']} | {info['lineup_slot']} | "
-            f"{info['status']} | {_fmt(info['blended_projection'])} |"
+            f"{info['status']} | {_fmt(info['blended_projection'])} | {_breakdown_str(info['breakdown'])} |"
         )
 
     if waiver_rec:

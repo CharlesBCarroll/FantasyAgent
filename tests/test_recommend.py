@@ -45,6 +45,20 @@ def test_status_alert_flagged_for_questionable_starter():
     assert rec["status_alerts"][0]["name"] == "Hurt Guy"
 
 
+def test_trending_down_alert_flagged_for_rostered_player_being_dropped(monkeypatch):
+    monkeypatch.setattr(
+        "fantasy_agent.projections.sleeper_source.get_trending",
+        lambda direction="add", **k: {"cold bench guy": 5000} if direction == "drop" else {},
+    )
+    bench = make_player("Cold Bench Guy", "RB", "BN", native_projection=3.0)
+    other = make_player("Fine Player", "RB", "RB", native_projection=10.0)
+    roster = Roster(platform="espn", team_name="My Team", week=3, players=[bench, other])
+    rec = generate_lineup_recommendations(roster, season=2026, week=3, weights=None)
+    assert len(rec["trending_down_alerts"]) == 1
+    assert rec["trending_down_alerts"][0]["name"] == "Cold Bench Guy"
+    assert rec["trending_down_alerts"][0]["drop_count"] == 5000
+
+
 def test_swap_suggested_when_bench_player_clearly_outprojects_starter():
     starter = make_player("Weak Starter", "RB", "RB", native_projection=5.0)
     bench = make_player("Strong Bench", "RB", "BN", native_projection=12.0, eligible_slots=["RB", "BN"])

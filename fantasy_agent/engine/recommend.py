@@ -28,6 +28,19 @@ def _trending_adds() -> dict[str, int]:
         return {}
 
 
+def _trending_drops() -> dict[str, int]:
+    """Sleeper's 24h trending-drop counts, keyed by normalized player name.
+
+    Used as an early warning on your OWN roster — a rostered player being
+    cut across the league en masse often precedes an official injury/role
+    announcement.
+    """
+    try:
+        return sleeper_source.get_trending("drop", lookback_hours=24, limit=100)
+    except Exception:
+        return {}
+
+
 def project_player(
     player: Player | FreeAgent,
     season: int,
@@ -92,6 +105,18 @@ def generate_lineup_recommendations(
         if p.status in STATUS_ALERT_LEVELS
     ]
 
+    trending_drops = _trending_drops()
+    trending_down_alerts = [
+        {
+            "player_id": p.player_id,
+            "name": p.name,
+            "lineup_slot": p.lineup_slot,
+            "drop_count": trending_drops[normalize_name(p.name)],
+        }
+        for p in roster.players
+        if normalize_name(p.name) in trending_drops
+    ]
+
     swaps = []
     close_calls = []
     for starter in roster.starters():
@@ -131,6 +156,7 @@ def generate_lineup_recommendations(
         "week": week,
         "projections": projections,
         "status_alerts": status_alerts,
+        "trending_down_alerts": trending_down_alerts,
         "start_sit_swaps": swaps,
         "close_calls": close_calls,
     }
