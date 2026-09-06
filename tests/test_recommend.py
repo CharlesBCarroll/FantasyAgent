@@ -10,9 +10,10 @@ from fantasy_agent.platforms.base import FreeAgent, Player, Roster
 
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
-    # recent_trend / opponent_defense_rank normally hit nfl_data_py; keep tests offline.
+    # recent_trend / opponent_defense_rank / Sleeper trending normally hit the network; keep tests offline.
     monkeypatch.setattr("fantasy_agent.projections.nfl_data_source.recent_trend", lambda *a, **k: None)
     monkeypatch.setattr("fantasy_agent.projections.nfl_data_source.opponent_defense_rank", lambda *a, **k: None)
+    monkeypatch.setattr("fantasy_agent.projections.sleeper_source.get_trending", lambda *a, **k: {})
 
 
 def make_player(name, position, slot, status="ACTIVE", native_projection=10.0, eligible_slots=None):
@@ -78,3 +79,35 @@ def test_waiver_recommendation_flags_upgrade_over_weakest_rostered():
     waivers = generate_waiver_recommendations(roster, [agent], season=2026, week=3, weights=None)
     assert waivers["WR"][0]["name"] == "Hot Waiver Add"
     assert waivers["WR"][0]["beats_weakest_rostered"] is True
+
+
+def test_waiver_recommendation_surfaces_sleeper_trending_adds(monkeypatch):
+    monkeypatch.setattr(
+        "fantasy_agent.projections.sleeper_source.get_trending",
+        lambda *a, **k: {"hot waiver add": 12345},
+    )
+    roster = Roster(platform="espn", team_name="My Team", week=3, players=[])
+    agent = FreeAgent(
+        platform="espn",
+        player_id="fa1",
+        name="Hot Waiver Add",
+        position="WR",
+        nfl_team="BUF",
+        native_projection=15.0,
+    )
+    waivers = generate_waiver_recommendations(roster, [agent], season=2026, week=3, weights=None)
+    assert waivers["WR"][0]["trending_adds"] == 12345
+
+
+def test_waiver_recommendation_trending_adds_is_none_when_not_trending():
+    roster = Roster(platform="espn", team_name="My Team", week=3, players=[])
+    agent = FreeAgent(
+        platform="espn",
+        player_id="fa1",
+        name="Quiet Player",
+        position="WR",
+        nfl_team="BUF",
+        native_projection=15.0,
+    )
+    waivers = generate_waiver_recommendations(roster, [agent], season=2026, week=3, weights=None)
+    assert waivers["WR"][0]["trending_adds"] is None

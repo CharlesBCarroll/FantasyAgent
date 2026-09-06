@@ -9,10 +9,23 @@ status alerts, close calls, waiver candidates) that the runtime research layer
 
 from fantasy_agent.engine.blend import blend, matchup_adjustment
 from fantasy_agent.platforms.base import FreeAgent, Player, Roster
-from fantasy_agent.projections import nfl_data_source
+from fantasy_agent.projections import nfl_data_source, sleeper_source
+from fantasy_agent.utils import normalize_name
 
 STATUS_ALERT_LEVELS = {"QUESTIONABLE", "DOUBTFUL", "OUT", "IR"}
 CLOSE_CALL_MARGIN = 2.0
+
+
+def _trending_adds() -> dict[str, int]:
+    """Sleeper's 24h trending-add counts, keyed by normalized player name.
+
+    Best-effort: Sleeper is a third-party signal, not required for the core
+    pipeline, so a network hiccup here shouldn't break recommendations.
+    """
+    try:
+        return sleeper_source.get_trending("add", lookback_hours=24, limit=100)
+    except Exception:
+        return {}
 
 
 def project_player(
@@ -141,6 +154,8 @@ def generate_waiver_recommendations(
         if current is None or blended < current:
             weakest_by_position[player.position] = blended
 
+    trending_adds = _trending_adds()
+
     by_position: dict[str, list[dict]] = {}
     for agent in free_agents:
         blended, breakdown = project_player(agent, season, week, weights, scoring)
@@ -154,6 +169,7 @@ def generate_waiver_recommendations(
                 "percent_owned": agent.percent_owned,
                 "breakdown": breakdown,
                 "beats_weakest_rostered": blended > weakest_by_position.get(agent.position, 0.0),
+                "trending_adds": trending_adds.get(normalize_name(agent.name)),
             }
         )
 

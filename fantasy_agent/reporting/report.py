@@ -57,7 +57,9 @@ def render_team_report(lineup_rec: dict, waiver_rec: dict, graded_count: int) ->
             lines.append(f"\n**{position}**")
             for c in candidates:
                 flag = " (upgrade over your weakest rostered player)" if c["beats_weakest_rostered"] else ""
-                lines.append(f"- {c['name']} ({c['nfl_team']}) — {_fmt(c['projection'])} pts{flag}")
+                trending = c.get("trending_adds")
+                buzz = f", 🔥 {trending:,} adds in last 24h" if trending else ""
+                lines.append(f"- {c['name']} ({c['nfl_team']}) — {_fmt(c['projection'])} pts{buzz}{flag}")
 
     return "\n".join(lines)
 
