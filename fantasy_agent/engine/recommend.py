@@ -9,7 +9,7 @@ status alerts, close calls, waiver candidates) that the runtime research layer
 
 from fantasy_agent.engine.blend import blend, matchup_adjustment
 from fantasy_agent.platforms.base import FreeAgent, Player, Roster
-from fantasy_agent.projections import nfl_data_source, sleeper_source, weather_source
+from fantasy_agent.projections import fantasypros_source, nfl_data_source, sleeper_source, weather_source
 from fantasy_agent.utils import normalize_name, normalize_team_abbr
 
 STATUS_ALERT_LEVELS = {"QUESTIONABLE", "DOUBTFUL", "OUT", "IR"}
@@ -53,6 +53,7 @@ def project_player(
     sources = {
         "native": player.native_projection,
         "trend": nfl_data_source.recent_trend(player.name, season, week, resolved_scoring),
+        "fantasypros": fantasypros_source.get_projection(player.name, season, week, scoring),
     }
     blended, breakdown = blend(sources, player.position, weights)
 
