@@ -53,7 +53,7 @@ def project_player(
     sources = {
         "native": player.native_projection,
         "trend": nfl_data_source.recent_trend(player.name, season, week, resolved_scoring),
-        "fantasypros": fantasypros_source.get_projection(player.name, season, week, scoring),
+        "fantasypros": fantasypros_source.get_projection(player.name, player.position, season, week, scoring),
     }
     blended, breakdown = blend(sources, player.position, weights)
 
