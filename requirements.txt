@@ -1,0 +1,8 @@
+espn-api>=0.40.0
+yfpy>=16.0.0
+requests>=2.31.0
+nfl_data_py>=0.3.2
+pandas>=2.0.0
+PyYAML>=6.0
+python-dotenv>=1.0.0
+pytest>=8.0.0

@@ -1,0 +1,80 @@
+import pytest
+
+from fantasy_agent.engine.recommend import (
+    generate_lineup_recommendations,
+    generate_waiver_recommendations,
+    project_player,
+)
+from fantasy_agent.platforms.base import FreeAgent, Player, Roster
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    # recent_trend / opponent_defense_rank normally hit nfl_data_py; keep tests offline.
+    monkeypatch.setattr("fantasy_agent.projections.nfl_data_source.recent_trend", lambda *a, **k: None)
+    monkeypatch.setattr("fantasy_agent.projections.nfl_data_source.opponent_defense_rank", lambda *a, **k: None)
+
+
+def make_player(name, position, slot, status="ACTIVE", native_projection=10.0, eligible_slots=None):
+    return Player(
+        platform="espn",
+        player_id=name.replace(" ", "_"),
+        name=name,
+        position=position,
+        nfl_team="KC",
+        lineup_slot=slot,
+        status=status,
+        native_projection=native_projection,
+        eligible_slots=eligible_slots or [slot],
+    )
+
+
+def test_project_player_uses_native_projection_when_trend_unavailable():
+    player = make_player("Test Back", "RB", "RB", native_projection=14.0)
+    blended, breakdown = project_player(player, season=2026, week=3, weights=None)
+    assert blended == 14.0
+    assert breakdown == {"native": 14.0}
+
+
+def test_status_alert_flagged_for_questionable_starter():
+    starter = make_player("Hurt Guy", "WR", "WR", status="QUESTIONABLE", native_projection=10.0)
+    roster = Roster(platform="espn", team_name="My Team", week=3, players=[starter])
+    rec = generate_lineup_recommendations(roster, season=2026, week=3, weights=None)
+    assert len(rec["status_alerts"]) == 1
+    assert rec["status_alerts"][0]["name"] == "Hurt Guy"
+
+
+def test_swap_suggested_when_bench_player_clearly_outprojects_starter():
+    starter = make_player("Weak Starter", "RB", "RB", native_projection=5.0)
+    bench = make_player("Strong Bench", "RB", "BN", native_projection=12.0, eligible_slots=["RB", "BN"])
+    roster = Roster(platform="espn", team_name="My Team", week=3, players=[starter, bench])
+    rec = generate_lineup_recommendations(roster, season=2026, week=3, weights=None)
+    assert len(rec["start_sit_swaps"]) == 1
+    swap = rec["start_sit_swaps"][0]
+    assert swap["start"] == "Strong Bench"
+    assert swap["sit"] == "Weak Starter"
+
+
+def test_close_call_flagged_for_small_margin():
+    starter = make_player("Starter", "RB", "RB", native_projection=10.0)
+    bench = make_player("Bench Guy", "RB", "BN", native_projection=11.0, eligible_slots=["RB", "BN"])
+    roster = Roster(platform="espn", team_name="My Team", week=3, players=[starter, bench])
+    rec = generate_lineup_recommendations(roster, season=2026, week=3, weights=None)
+    assert rec["start_sit_swaps"] == []
+    assert len(rec["close_calls"]) == 1
+
+
+def test_waiver_recommendation_flags_upgrade_over_weakest_rostered():
+    starter = make_player("Weak WR", "WR", "WR", native_projection=6.0)
+    roster = Roster(platform="espn", team_name="My Team", week=3, players=[starter])
+    agent = FreeAgent(
+        platform="espn",
+        player_id="fa1",
+        name="Hot Waiver Add",
+        position="WR",
+        nfl_team="BUF",
+        native_projection=15.0,
+    )
+    waivers = generate_waiver_recommendations(roster, [agent], season=2026, week=3, weights=None)
+    assert waivers["WR"][0]["name"] == "Hot Waiver Add"
+    assert waivers["WR"][0]["beats_weakest_rostered"] is True
