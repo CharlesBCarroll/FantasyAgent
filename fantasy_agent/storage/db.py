@@ -54,6 +54,26 @@ CREATE TABLE IF NOT EXISTS source_weights (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (source, position)
 );
+
+CREATE TABLE IF NOT EXISTS trade_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform TEXT NOT NULL,
+    league_label TEXT NOT NULL,
+    season INTEGER NOT NULL,
+    week_suggested INTEGER NOT NULL,
+    other_team_name TEXT NOT NULL,
+    give_player_name TEXT NOT NULL,
+    give_position TEXT NOT NULL,
+    give_value_at_suggestion REAL NOT NULL,
+    get_player_name TEXT NOT NULL,
+    get_position TEXT NOT NULL,
+    get_value_at_suggestion REAL NOT NULL,
+    graded INTEGER NOT NULL DEFAULT 0,
+    give_actual_total REAL,
+    get_actual_total REAL,
+    graded_at TEXT,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -175,3 +195,83 @@ def set_source_weight(conn: sqlite3.Connection, source: str, position: str, weig
         (source, position, weight, datetime.now(timezone.utc).isoformat()),
     )
     conn.commit()
+
+
+def record_trade_suggestion(
+    conn: sqlite3.Connection,
+    *,
+    platform: str,
+    league_label: str,
+    season: int,
+    week_suggested: int,
+    other_team_name: str,
+    give_player_name: str,
+    give_position: str,
+    give_value_at_suggestion: float,
+    get_player_name: str,
+    get_position: str,
+    get_value_at_suggestion: float,
+) -> None:
+    conn.execute(
+        """INSERT INTO trade_suggestions
+           (platform, league_label, season, week_suggested, other_team_name,
+            give_player_name, give_position, give_value_at_suggestion,
+            get_player_name, get_position, get_value_at_suggestion, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            platform,
+            league_label,
+            season,
+            week_suggested,
+            other_team_name,
+            give_player_name,
+            give_position,
+            give_value_at_suggestion,
+            get_player_name,
+            get_position,
+            get_value_at_suggestion,
+            datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+    conn.commit()
+
+
+def get_pending_trade_suggestions(
+    conn: sqlite3.Connection,
+    platform: str,
+    league_label: str,
+    season: int,
+    current_week: int,
+    grade_after_weeks: int,
+) -> list[sqlite3.Row]:
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """SELECT * FROM trade_suggestions
+           WHERE platform = ? AND league_label = ? AND season = ? AND graded = 0
+           AND week_suggested <= ?""",
+        (platform, league_label, season, current_week - grade_after_weeks),
+    ).fetchall()
+    conn.row_factory = None
+    return rows
+
+
+def record_trade_grade(conn: sqlite3.Connection, suggestion_id: int, give_actual_total: float, get_actual_total: float) -> None:
+    conn.execute(
+        """UPDATE trade_suggestions
+           SET graded = 1, give_actual_total = ?, get_actual_total = ?, graded_at = ?
+           WHERE id = ?""",
+        (give_actual_total, get_actual_total, datetime.now(timezone.utc).isoformat(), suggestion_id),
+    )
+    conn.commit()
+
+
+def get_graded_trade_history(conn: sqlite3.Connection, platform: str, league_label: str, season: int) -> list[sqlite3.Row]:
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """SELECT * FROM trade_suggestions
+           WHERE platform = ? AND league_label = ? AND season = ? AND graded = 1
+           ORDER BY week_suggested DESC""",
+        (platform, league_label, season),
+    ).fetchall()
+    conn.row_factory = None
+    return rows

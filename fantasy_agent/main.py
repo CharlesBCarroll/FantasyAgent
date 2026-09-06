@@ -19,15 +19,21 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from fantasy_agent.engine import learning
+from fantasy_agent.engine import learning, trade
 from fantasy_agent.engine.recommend import (
     generate_lineup_recommendations,
     generate_waiver_recommendations,
     suggest_handcuffs,
 )
 from fantasy_agent.grading.grade import grade_pending_weeks
+from fantasy_agent.grading.grade_trades import grade_pending_trades
 from fantasy_agent.platforms import espn_client, yahoo_client
-from fantasy_agent.reporting.report import render_accuracy_summary, render_full_report, render_team_report
+from fantasy_agent.reporting.report import (
+    render_accuracy_summary,
+    render_full_report,
+    render_team_report,
+    render_trade_report,
+)
 from fantasy_agent.storage import db
 from fantasy_agent.utils import current_week
 
@@ -92,9 +98,57 @@ def run_league(conn, client_module, platform: str, league_cfg: dict, season: int
     }
 
 
+def run_trade_analysis(conn, client_module, platform: str, league_cfg: dict, season: int, week: int) -> dict:
+    label = league_cfg.get("label") or f"{platform}-{league_cfg.get('league_id')}"
+    scoring = league_cfg.get("scoring")
+
+    graded_count = grade_pending_trades(conn, platform, label, season, week, scoring)
+    weights = db.get_source_weights(conn)
+
+    all_rosters = client_module.get_all_rosters(season, league_cfg, week)
+    user_team_id = int(league_cfg["team_id"])
+    user_roster = all_rosters.pop(user_team_id)
+
+    user_strength = trade.analyze_team(user_roster, season, week, weights, scoring)
+    other_strengths = {
+        roster.team_name: trade.analyze_team(roster, season, week, weights, scoring)
+        for roster in all_rosters.values()
+    }
+
+    proposals = trade.find_trade_proposals(user_strength, other_strengths)
+
+    for p in proposals:
+        db.record_trade_suggestion(
+            conn,
+            platform=platform,
+            league_label=label,
+            season=season,
+            week_suggested=week,
+            other_team_name=p["team_name"],
+            give_player_name=p["give_player"],
+            give_position=p["give_position"],
+            give_value_at_suggestion=p["give_value"],
+            get_player_name=p["get_player"],
+            get_position=p["get_position"],
+            get_value_at_suggestion=p["get_value"],
+        )
+
+    graded_history = db.get_graded_trade_history(conn, platform, label, season)
+    markdown = render_trade_report(label, proposals, graded_history)
+
+    return {
+        "platform": platform,
+        "label": label,
+        "graded_count": graded_count,
+        "proposals": proposals,
+        "graded_history": [dict(row) for row in graded_history],
+        "markdown": markdown,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Fantasy manager agent data pipeline")
-    parser.add_argument("command", choices=["run"])
+    parser.add_argument("command", choices=["run", "trade"])
     parser.add_argument("--platform", choices=["yahoo", "espn", "all"], default="all")
     parser.add_argument("--week", type=int, default=None)
     args = parser.parse_args()
@@ -122,6 +176,21 @@ def main() -> None:
 
     conn = db.get_connection()
     db.init_db(conn)
+
+    if args.command == "trade":
+        results = []
+        for platform, league_cfg in enabled_leagues:
+            client_module = CLIENTS[platform]
+            if not hasattr(client_module, "get_all_rosters"):
+                print(f"Trade analysis isn't supported for {platform} yet, skipping.", file=sys.stderr)
+                continue
+            results.append(run_trade_analysis(conn, client_module, platform, league_cfg, season, week))
+        conn.close()
+
+        full_report = "\n\n".join(r["markdown"] for r in results)
+        output = {"season": season, "week": week, "results": results, "full_report_markdown": full_report}
+        print(json.dumps(output, indent=2, default=str))
+        return
 
     results = []
     for platform, league_cfg in enabled_leagues:

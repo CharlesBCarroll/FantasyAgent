@@ -134,6 +134,35 @@ def render_accuracy_summary(summary: dict) -> str:
     return "\n".join(lines)
 
 
+def render_trade_report(label: str, proposals: list, graded_history: list) -> str:
+    lines = [f"## Trade Analysis — {label}"]
+
+    if graded_history:
+        lines.append("\n### Past Suggestion Track Record")
+        for row in graded_history[:5]:
+            delta = row["get_actual_total"] - row["give_actual_total"]
+            verdict = "would have helped" if delta > 0 else "would not have helped"
+            lines.append(
+                f"- Week {row['week_suggested']}: {row['give_player_name']} for {row['get_player_name']} "
+                f"({row['other_team_name']}) — actual {_fmt(row['get_actual_total'])} vs "
+                f"{_fmt(row['give_actual_total'])} pts since, {verdict}"
+            )
+
+    if not proposals:
+        lines.append("\n_No clear mutually beneficial trade found this week._")
+        return "\n".join(lines)
+
+    lines.append("\n### Suggested Trades")
+    for p in proposals:
+        lines.append(
+            f"- With **{p['team_name']}**: give {p['give_player']} ({p['give_position']}, "
+            f"{_fmt(p['give_value'])} pts) for {p['get_player']} ({p['get_position']}, "
+            f"{_fmt(p['get_value'])} pts) — value delta {_fmt(p['value_delta'])}"
+        )
+
+    return "\n".join(lines)
+
+
 def render_full_report(season: int, week: int, team_sections: list[str]) -> str:
     header = f"# Fantasy Lineup Report — {season} Week {week}\n"
     return header + "\n\n".join(team_sections)

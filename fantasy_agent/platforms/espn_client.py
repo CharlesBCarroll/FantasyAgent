@@ -67,6 +67,30 @@ def get_roster(season: int, league_cfg: dict, week: int) -> Roster:
     return Roster(platform="espn", team_name=team.team_name, week=week, players=players)
 
 
+def get_all_rosters(season: int, league_cfg: dict, week: int) -> dict[int, Roster]:
+    """Every team's roster in the league this week, keyed by ESPN team_id.
+
+    Used by the trade analyzer to see what other managers have, not just
+    your own team.
+    """
+    league = _get_league(season, league_cfg)
+    rosters: dict[int, Roster] = {}
+    for box in league.box_scores(week):
+        rosters[box.home_team.team_id] = Roster(
+            platform="espn",
+            team_name=box.home_team.team_name,
+            week=week,
+            players=[_to_player(p) for p in box.home_lineup],
+        )
+        rosters[box.away_team.team_id] = Roster(
+            platform="espn",
+            team_name=box.away_team.team_name,
+            week=week,
+            players=[_to_player(p) for p in box.away_lineup],
+        )
+    return rosters
+
+
 def get_matchup(season: int, league_cfg: dict, week: int) -> Matchup:
     league = _get_league(season, league_cfg)
     team_id = int(league_cfg["team_id"])
